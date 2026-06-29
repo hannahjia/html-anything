@@ -137,6 +137,16 @@ export function buildArgv(agent: string, _opts: AgentArgvOpts = {}): string[] {
 export function envFor(agent: string): NodeJS.ProcessEnv {
   const base = { ...process.env };
   if (agent === "gemini") base.GEMINI_CLI_TRUST_WORKSPACE = "true";
+  // Claude Code CLI hard-codes a 32,000 output-token cap (the ceiling where
+  // a long HTML report — front matter, KEC-styled tables, multiple charts,
+  // multi-section copy — gets cut off mid-element, leaving the streamed
+  // response visibly truncated). The CLI accepts the documented override
+  // `CLAUDE_CODE_MAX_OUTPUT_TOKENS=<N>`. 64,000 covers most report-size
+  // generations; users can still override by exporting a higher value
+  // before starting the dev server (we only set it when the user hasn't).
+  if (agent === "claude" && !base.CLAUDE_CODE_MAX_OUTPUT_TOKENS) {
+    base.CLAUDE_CODE_MAX_OUTPUT_TOKENS = "64000";
+  }
   return base;
 }
 
