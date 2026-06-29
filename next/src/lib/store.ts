@@ -180,6 +180,8 @@ type Persisted = {
   historyPaneOpen: boolean;
   locale: Locale;
   layoutMode: LayoutMode;
+  /** Persisted user-set deck/section upper bound. Undefined ⇒ project default. */
+  pageBudget?: number;
 };
 
 type State = {
@@ -264,6 +266,16 @@ type State = {
   setHistoryPaneOpen: (v: boolean) => void;
   setLocale: (l: Locale) => void;
   setLayoutMode: (m: LayoutMode) => void;
+
+  /**
+   * Per-user deck/section upper bound. Undefined = project default
+   * (content drives quantity, no upper limit, per SHARED_DESIGN_DIRECTIVES).
+   * Set to a positive integer to clamp output via the `<USER_HARD_CONSTRAINTS>`
+   * block the convert route prepends. Global (not per-task) — the user's
+   * "I like 8-page decks" preference doesn't change between tasks.
+   */
+  pageBudget?: number;
+  setPageBudget: (n: number | undefined) => void;
 };
 
 function patchTask(tasks: Task[], id: string, patch: Partial<Task> | ((t: Task) => Partial<Task>)): Task[] {
@@ -293,6 +305,9 @@ export const useStore = create<State>()(
       historyPaneOpen: false,
       locale: "en",
       layoutMode: "split",
+
+      // undefined = no user override (project default behaviour).
+      pageBudget: undefined,
 
       newTask: (init) => {
         const tasks = get().tasks;
@@ -485,12 +500,16 @@ export const useStore = create<State>()(
       setHistoryPaneOpen: (v) => set({ historyPaneOpen: v }),
       setLocale: (l) => set({ locale: l }),
       setLayoutMode: (m) => set({ layoutMode: m }),
+      setPageBudget: (n) =>
+        set({
+          pageBudget: typeof n === "number" && n > 0 ? n : undefined,
+        }),
     }),
     {
       // Legacy key from the old "HTML Everything" brand; do NOT rename — every
       // existing user's saved tasks live under this localStorage key.
       name: "html-everything-store",
-      version: 7,
+      version: 8,
       partialize: (s): Persisted => ({
         tasks: s.tasks.map((t) => ({
           ...t,
@@ -506,6 +525,7 @@ export const useStore = create<State>()(
         historyPaneOpen: s.historyPaneOpen,
         locale: s.locale,
         layoutMode: s.layoutMode,
+        pageBudget: s.pageBudget,
       }),
       migrate: (persisted, fromVersion): Persisted => {
         // v1 → v2: wrap top-level content/format/filename/selectedTemplate into a single task.
@@ -571,6 +591,10 @@ export const useStore = create<State>()(
             }
           }
         }
+        // v7 → v8: user-set deck/section upper bound (pageBudget). Stored
+        // as a global preference; missing on older records ⇒ undefined,
+        // which the route treats as "no override, project default applies".
+        // No migration needed beyond the version bump itself.
         return persisted as Persisted;
       },
     },

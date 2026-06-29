@@ -11,6 +11,7 @@ import { DraftsMenu } from "./drafts-menu";
 import { SamplesGallery } from "./samples-gallery";
 import { FormatsGallery } from "./formats-gallery";
 import { AiPromptBar } from "./ai-prompt-bar";
+import { PageBudgetPicker } from "./page-budget-picker";
 
 const TAB_KEY: Record<"text" | "formats" | "samples", DictKey> = {
   text: "editor.tab.text",
@@ -77,6 +78,8 @@ export function EditorPane() {
               <span className="mx-1 opacity-40">·</span>
               {t("editor.chars", { n: content.length.toLocaleString() })}
             </span>
+            <span className="shrink-0 opacity-40">|</span>
+            <PageBudgetPicker />
           </div>
         )}
       </div>

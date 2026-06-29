@@ -12,6 +12,14 @@ type ConvertReq = {
   format?: string;
   /** Optional model override. "default" / undefined → no --model flag. */
   model?: string;
+  /**
+   * Optional user-set slide/section upper bound. When set, the server
+   * prepends a `<USER_HARD_CONSTRAINTS>` block above SHARED_DESIGN_DIRECTIVES
+   * so the model treats the cap as more binding than the project's
+   * "content drives quantity, no upper limit" rule. Undefined ⇒ identical
+   * to the previous prompt shape (the project rule stays authoritative).
+   */
+  pageBudget?: number;
 };
 
 /** prefix logged when the run is sent in diff-edit mode (vs full regeneration) */
@@ -86,15 +94,17 @@ export function useConvert() {
         format: req.format ?? summary.format,
         ...(useModel ? { model: useModel } : {}),
         ...(binOverride ? { binOverride } : {}),
+        ...(req.pageBudget ? { pageBudget: req.pageBudget } : {}),
         ...(editPayload ?? {}),
       };
 
       const sizeNote = `输入 ${enrichedContent.length.toLocaleString()} 字符 (${summary.format})`;
+      const budgetNote = req.pageBudget ? ` · 上限 ${req.pageBudget} 页` : "";
       store.pushLogFor(taskId, {
         kind: "info",
         text: isEdit
-          ? `${DIFF_LOG_PREFIX} · ${req.agent}${useModel ? ` · 模型 ${useModel}` : ""} · 模板 ${req.templateId} · ${sizeNote} · 原 HTML ${(task!.baseHtml!.length / 1024).toFixed(1)} KB`
-          : `准备调用 ${req.agent}${useModel ? ` · 模型 ${useModel}` : ""} · 模板 ${req.templateId} · ${sizeNote}`,
+          ? `${DIFF_LOG_PREFIX} · ${req.agent}${useModel ? ` · 模型 ${useModel}` : ""} · 模板 ${req.templateId} · ${sizeNote} · 原 HTML ${(task!.baseHtml!.length / 1024).toFixed(1)} KB${budgetNote}`
+          : `准备调用 ${req.agent}${useModel ? ` · 模型 ${useModel}` : ""} · 模板 ${req.templateId} · ${sizeNote}${budgetNote}`,
       });
 
       try {

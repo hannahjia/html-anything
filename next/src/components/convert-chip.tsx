@@ -20,6 +20,7 @@ export function ConvertChip() {
   const format = useStore((s) => selectActiveTask(s)?.format ?? "text");
   const status = useStore((s) => selectActiveTask(s)?.status ?? "idle");
   const layoutMode = useStore((s) => s.layoutMode);
+  const pageBudget = useStore((s) => s.pageBudget);
   const { run, cancel } = useConvert();
   const t = useT();
 
@@ -44,8 +45,16 @@ export function ConvertChip() {
       return;
     }
     if (!canConvert) return;
-    run({ taskId: activeTaskId, agent: agent!, templateId: template, content, format, model });
-  }, [isRunning, canConvert, cancel, run, activeTaskId, agent, template, content, format, model]);
+    run({
+      taskId: activeTaskId,
+      agent: agent!,
+      templateId: template,
+      content,
+      format,
+      model,
+      ...(pageBudget ? { pageBudget } : {}),
+    });
+  }, [isRunning, canConvert, cancel, run, activeTaskId, agent, template, content, format, model, pageBudget]);
 
   // ⌘/Ctrl + Enter — global shortcut, fires Convert from anywhere on the page.
   // Lives here (not in Toolbar) because the chip is the single source of

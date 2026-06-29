@@ -25,6 +25,15 @@ type Body = {
    *  implies). Saves output tokens AND prevents creative drift between runs. */
   editFromHtml?: string;
   editFromContent?: string;
+  /**
+   * Optional user-set slide/section upper bound (e.g. 8 for a "8-page deck").
+   * When unset, the project's `SHARED_DESIGN_DIRECTIVES` rule "content
+   * drives quantity, no upper limit" stays authoritative. When set, the
+   * route prepends a `<USER_HARD_CONSTRAINTS>` block above the shared
+   * directives so the model treats the cap as more binding than the
+   * "no cap" rule. See `shared.ts#assemblePrompt`.
+   */
+  pageBudget?: number;
 };
 
 function buildEditPrompt(args: {
@@ -78,6 +87,7 @@ export async function POST(req: NextRequest) {
     binOverride,
     editFromHtml,
     editFromContent,
+    pageBudget,
   } = body;
   if (!agent || !templateId || !content) {
     return new Response("missing required fields: agent, templateId, content", {
@@ -88,6 +98,28 @@ export async function POST(req: NextRequest) {
   if (!skill) {
     return new Response(`unknown template: ${templateId}`, { status: 400 });
   }
+
+  // Build the optional user-hard-constraints block. Only emitted when the
+  // client supplied a pageBudget; otherwise the prompt is byte-identical
+  // to its pre-feature shape so existing users see no behaviour change.
+  const userHardConstraints =
+    typeof pageBudget === "number" && pageBudget > 0
+      ? `<USER_HARD_CONSTRAINTS>
+【最高优先级 · 覆盖项目内置规则】
+
+用户(不是你默认遵循的项目指令的作者)已经显式为本任务设定了页面/章节数量上限:
+
+  本次输出**最多 ${pageBudget} 张 slide / 帧 / section / 卡片**。不许超出。
+
+后果:
+- 这一条用户指令 **覆盖** 项目 SHARED_DESIGN_DIRECTIVES 中"内容驱动数量 / 没有上限"的规则。
+- 如果用户内容丰富, 把相近要点**合并到同一张**而不是拆开 — 宁可少而精, 也不要凑数。
+- 如果用户内容稀疏, 产出可以少于 ${pageBudget} 张; 上限不是必须凑齐的目标。
+- 写完前自查一次: 实际输出的 section/slide/card 数量必须 ≤ ${pageBudget}。
+
+把你所有的版面 / 内容分配决策都服从这条用户硬约束。
+</USER_HARD_CONSTRAINTS>`
+      : undefined;
 
   let prompt: string;
   if (editFromHtml && editFromContent) {
@@ -100,7 +132,12 @@ export async function POST(req: NextRequest) {
       format,
     });
   } else {
-    prompt = assemblePrompt({ body: skill.body, content, format });
+    prompt = assemblePrompt({
+      body: skill.body,
+      content,
+      format,
+      ...(userHardConstraints ? { userHardConstraints } : {}),
+    });
   }
   const abortCtl = new AbortController();
   req.signal?.addEventListener("abort", () => abortCtl.abort(), { once: true });

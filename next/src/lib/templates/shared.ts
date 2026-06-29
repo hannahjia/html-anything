@@ -42,13 +42,22 @@ export const SHARED_DESIGN_DIRECTIVES = `
  * the user content tail. This is the canonical prompt shape; both inline
  * `buildPrompt` functions in `index.ts` and the skill-folder loader assemble
  * prompts via this helper so behaviour stays identical.
+ *
+ * `userHardConstraints` is an *optional* escape hatch for callers that need
+ * to override the project-wide "content drives quantity / no upper limit"
+ * rule. When provided, it is prepended ABOVE SHARED_DESIGN_DIRECTIVES so
+ * the user constraint sits at the very top of the context — typically
+ * more decisive in the model's trade-off than a directive further down.
+ * When omitted, the prompt is byte-identical to the previous shape.
  */
 export function assemblePrompt(opts: {
   body: string;
   content: string;
   format: string;
+  userHardConstraints?: string;
 }): string {
-  return `${SHARED_DESIGN_DIRECTIVES}
+  const head = opts.userHardConstraints ? `${opts.userHardConstraints}\n` : "";
+  return `${head}${SHARED_DESIGN_DIRECTIVES}
 ${opts.body.trim()}
 
 【输入格式】: ${opts.format}
