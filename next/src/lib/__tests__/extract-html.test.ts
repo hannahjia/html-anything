@@ -18,6 +18,21 @@ describe("extractHtml", () => {
     expect(html).toContain("<!DOCTYPE html>");
     expect(html).toContain("hello &lt;world&gt;");
   });
+
+  it("keeps only the last document when the agent re-emits DOCTYPE mid-stream", () => {
+    // Reproduces the Claude CLI mid-stream restart bug: the model emits a
+    // partial first document, then re-starts with a fresh <!DOCTYPE html>.
+    // The earlier artifact (cut off mid-attribute) must NOT bleed into the
+    // rendered output — only the second document survives.
+    const source =
+      "<!DOCTYPE html><html><body>" +
+      "<ol><li class=\"flex gap<!DOCTYPE html>" +
+      "<html><body><main>SECOND DOC body only</main>";
+    const out = extractHtml(source);
+    expect(out.startsWith("<!DOCTYPE html>")).toBe(true);
+    expect(out).toContain("SECOND DOC");
+    expect(out).not.toContain("class=\"flex gap<!DOCTYPE");
+  });
 });
 
 describe("previewHtml", () => {

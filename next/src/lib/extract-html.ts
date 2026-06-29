@@ -12,15 +12,27 @@ export function extractHtml(streamed: string): string {
     if (inner.startsWith("<")) return inner;
   }
 
-  // 2. Find <!DOCTYPE html ... </html>
-  const doctypeStart = streamed.search(/<!DOCTYPE\s+html/i);
-  if (doctypeStart !== -1) {
-    const closeIdx = streamed.lastIndexOf("</html>");
+  // 2. Find <!DOCTYPE html ... </html>.
+  // When the agent emits multiple documents in one stream (observed with
+  // `claude --include-partial-messages`: the model can restart mid-stream
+  // and re-emit `<!DOCTYPE html>`, leaving an aborted first doc plus a
+  // second fresh doc), keep ONLY the last complete document. Anything
+  // before the final DOCTYPE is a partial artifact the browser would
+  // otherwise glue onto the rendered output and break the layout.
+  const doctypeRegex = /<!DOCTYPE\s+html/gi;
+  const doctypeMatches = [...streamed.matchAll(doctypeRegex)];
+  if (doctypeMatches.length > 0) {
+    const lastStart = doctypeMatches[doctypeMatches.length - 1].index!;
+    const after = streamed.slice(lastStart);
+    const closeIdx = after.lastIndexOf("</html>");
     if (closeIdx !== -1) {
-      return streamed.slice(doctypeStart, closeIdx + "</html>".length);
+      return streamed.slice(
+        lastStart,
+        lastStart + closeIdx + "</html>".length,
+      );
     }
-    // streaming, partial — return from doctype to end
-    return streamed.slice(doctypeStart);
+    // streaming, partial — return from last doctype to end
+    return streamed.slice(lastStart);
   }
 
   // 3. Find <html> ... </html>
