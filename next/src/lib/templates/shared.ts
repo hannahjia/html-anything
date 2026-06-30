@@ -65,7 +65,7 @@ export const SHARED_DESIGN_DIRECTIVES = `
 - **中文**: Microsoft YaHei (微软雅黑)
 - **英文 / 数字 / 金额**: Arial (优先) 或 DIN Pro
 - 数字必须用等宽特征明显的字体, 防止小数点和千分位错位
-- 在 Tailwind 里用 `font-['Microsoft_YaHei',Arial,sans-serif]` / `font-['Arial']`
+- 在 Tailwind 里用 \`font-['Microsoft_YaHei',Arial,sans-serif]\` / \`font-['Arial']\`
 
 【图表 — 系列只画蓝, 绿/橙/红只给涨/跌/达成率】
 - 系列 1: #0072F5 / 系列 2: #4DA3FF / 系列 3: #A0C4FF
