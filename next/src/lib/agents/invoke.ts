@@ -164,12 +164,13 @@ export function invokeAgent(opts: InvokeOpts): ReadableStream<InvokeEvent> {
           stdio: ["pipe", "pipe", "pipe"],
           // On Windows, `spawn` cannot launch a `.cmd` / `.bat` shim (which is
           // what npm installs for most CLI agents) without going through the
-          // shell. Without this, every agent invocation fails with
-          // EINVAL / "spawn 无效的参数". macOS/Linux use direct exec.
+          // shell. Native `.exe` binaries should be spawned directly: wrapping
+          // them in `cmd.exe` can fail with STATUS_DLL_INIT_FAILED (0xC0000142)
+          // in detached / non-interactive server processes.
           // Safety: prompt content is delivered via stdin or `--message
-          // <text>` (argv-message), not interpolated into a shell command,
-          // so this does not introduce a shell-injection vector.
-          shell: process.platform === "win32",
+          // <text>` (argv-message), not interpolated into a shell command.
+          shell:
+            process.platform === "win32" && /\.(?:cmd|bat)$/i.test(bin!),
         });
       } catch (err) {
         safeEnqueue({
@@ -188,12 +189,31 @@ export function invokeAgent(opts: InvokeOpts): ReadableStream<InvokeEvent> {
       });
 
       child.stdin.on("error", () => {});
-      try {
-        // stdin-protocol agents read the prompt from stdin; argv / argv-message
-        // agents already have it on the command line.
-        if (!promptViaArgv && !promptViaMessageFlag) child.stdin.write(opts.prompt);
-        child.stdin.end();
-      } catch {}
+      // Defer the stdin write until the child has actually been spawned on
+      // the OS side. Without this, Node's `child_process.spawn()` returns
+      // synchronously while the OS is still mid-DLL-init; writing 30+ KB and
+      // closing stdin in the same tick can race with that init and surface
+      // as STATUS_DLL_INIT_FAILED (0xC0000142) on Windows, especially when
+      // the parent itself runs inside a Turbopack worker.
+      const feedPrompt = () => {
+        try {
+          // stdin-protocol agents read the prompt from stdin; argv / argv-message
+          // agents already have it on the command line.
+          if (!promptViaArgv && !promptViaMessageFlag) child.stdin.write(opts.prompt);
+          child.stdin.end();
+        } catch {}
+      };
+      let fed = false;
+      const feedOnce = () => {
+        if (fed) return;
+        fed = true;
+        feedPrompt();
+      };
+      child.once("spawn", feedOnce);
+      // Fallback: if `spawn` never fires (some Windows builds are slow on the
+      // first DLL load), still feed the prompt after 1s so we don't hang
+      // forever waiting on an event that won't come.
+      setTimeout(feedOnce, 1000).unref();
 
       // One parser per spawn so cross-line dedupe state (sawStreamEventText)
       // is scoped to this single invocation and doesn't leak across runs.
